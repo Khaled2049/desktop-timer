@@ -4,7 +4,7 @@
 
 # Desktop Timer
 
-A cyberpunk macOS menu bar timer with Pomodoro sessions and blurred reminders to move, stretch, and look around.
+A macOS menu bar timer with Pomodoro sessions and blurred reminders to move, stretch, and look around.
 
 ## Install
 
