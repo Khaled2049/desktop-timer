@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities for timer settings and break reminder windows",
+  "windows": [
+    "main",
+    "break-*"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

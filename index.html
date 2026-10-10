@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desktop Timer</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Desktop Timer</h1>
+        <div class="mode-switch" aria-label="Timer mode"><button data-mode="timer" aria-pressed="true">Timer</button><button data-mode="pomodoro" aria-pressed="false">Pomodoro</button></div>
+      </header>
+      <section class="clock" aria-label="Countdown">
+        <div id="countdown" role="timer" aria-live="off">25:00</div>
+        <p id="status" role="status">Ready</p>
+      </section>
+      <div class="actions"><button id="toggle" class="primary">Start timer</button><button id="reset" class="secondary">Reset</button></div>
+      <section id="pomodoro-info" hidden>
+        <h2 id="phase-label">Focus · Session 1 of 4</h2>
+        <div id="sessions" aria-label="Completed focus sessions"><span></span><span></span><span></span><span></span></div>
+        <p>25 min focus · 5 min break · 15 min long break</p>
+      </section>
+      <section class="duration">
+        <h2>Duration</h2>
+        <div class="presets" aria-label="Preset durations"><button data-minutes="5">5 min</button><button data-minutes="15">15 min</button><button data-minutes="25" aria-pressed="true">25 min</button></div>
+        <form id="duration-form">
+          <div class="field"><label for="minutes">Minutes</label><input id="minutes" type="number" min="0" max="1440" step="1" value="25" required /></div>
+          <span class="colon" aria-hidden="true">:</span>
+          <div class="field"><label for="seconds">Seconds</label><input id="seconds" type="number" min="0" max="59" step="1" value="0" required /></div>
+          <button type="submit" class="secondary apply">Set</button>
+        </form>
+      </section>
+      <p id="error" role="alert" hidden></p>
+      <footer><kbd>Control + S</kbd> to start / stop</footer>
+    </main>
+  </body>
+</html>
