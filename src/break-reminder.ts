@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import "./break-reminder.css";
+import { pickBreakPrompt } from "./break-prompts";
 import { type TimerState, startLabel } from "./timer-state";
 
 document.documentElement.classList.add("break-screen");
@@ -12,7 +13,7 @@ document.body.innerHTML = `
     <h1 id="break-title">A moment to move.</h1>
     <p class="break-message">Stand up, stretch a little, and look around.<br />Give your eyes a view beyond the screen.</p>
     <button id="dismiss-break" autofocus>I’m ready</button>
-    <p class="break-hint">Press Escape to dismiss · Control + S to start again</p>
+    <p class="break-hint">Press Escape to dismiss · Control + Space to start again</p>
     <p id="break-error" role="alert" hidden></p>
   </main>
 `;
@@ -53,10 +54,16 @@ async function renderPhase() {
   try {
     const state = await invoke<TimerState>("get_timer");
     pomodoro = state.mode === "pomodoro";
+    // Finished breaks keep their own message; everything else gets a guided prompt.
+    if (!pomodoro || state.phase === "focus") {
+      const prompt = pickBreakPrompt(pomodoro && state.nextPhase === "long_break", state.finishedCount);
+      document.querySelector<HTMLElement>("#break-title")!.textContent = prompt.title;
+      document.querySelector<HTMLElement>(".break-message")!.textContent = prompt.message;
+    }
     if (!pomodoro) return;
     button.textContent = startLabel(state);
     const hint = document.querySelector<HTMLElement>(".break-hint")!;
-    hint.textContent = "Press Escape to dismiss · Control + S to start the next phase";
+    hint.textContent = "Press Escape to dismiss · Control + Space to start the next phase";
     if (state.phase !== "focus") {
       document.querySelector<HTMLElement>("#break-title")!.textContent = "Ready for a fresh focus?";
       document.querySelector<HTMLElement>(".break-message")!.textContent = "Your break is complete. Start your next focus session when you’re ready.";
