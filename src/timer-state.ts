@@ -5,6 +5,7 @@ export type TimerState = {
   mode: "timer" | "pomodoro";
   phase: "focus" | "short_break" | "long_break";
   completedSessions: number;
+  finishedCount: number;
   nextPhase: "focus" | "short_break" | "long_break";
 };
 export const phaseNames = { focus: "Focus", short_break: "Short break", long_break: "Long break" };

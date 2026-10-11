@@ -1,9 +1,13 @@
 mod break_reminder;
+mod focus_mode;
 mod timer;
 mod tray_icon;
 
 use std::{
-    sync::Mutex,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 use tauri::{
@@ -11,6 +15,7 @@ use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use timer::{Snapshot, Timer};
 
@@ -42,53 +47,116 @@ fn show_window(app: &tauri::AppHandle) {
     }
 }
 
+// Runs a tray menu item id; global shortcuts reuse the same ids.
+fn run_action(app: &tauri::AppHandle, id: &str) {
+    if id == "quit" {
+        focus_mode::turn_off_now();
+        app.exit(0);
+        return;
+    }
+    if id == "settings" {
+        show_window(app);
+        return;
+    }
+    let state = app.state::<Mutex<Timer>>();
+    if let Ok(mut timer) = state.lock() {
+        let now = SystemTime::now();
+        if let Some(minutes) = id
+            .strip_prefix("preset_")
+            .and_then(|s| s.parse::<u64>().ok())
+        {
+            let _ = timer.action("set_duration", Some(minutes * 60), now);
+            let _ = timer.action("start", None, now);
+        } else {
+            let _ = timer.action(id, None, now);
+        }
+    };
+}
+
+// Maps desktop-timer:// URLs such as start, pause, or preset/5 to an action id.
+fn url_action(host: &str, path: &str) -> Option<String> {
+    match host {
+        "start" | "pause" | "toggle" | "reset" | "pomodoro" | "timer" | "settings" => {
+            Some(host.into())
+        }
+        "preset" => path
+            .trim_matches('/')
+            .parse::<u64>()
+            .ok()
+            .filter(|minutes| (1..=1440).contains(minutes))
+            .map(|minutes| format!("preset_{minutes}")),
+        _ => None,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(Mutex::new(Timer::default()))
+        .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![get_timer, timer_action, break_reminder::dismiss_break])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::KeyS);
-            let shortcut_down = std::sync::atomic::AtomicBool::new(false);
+            let shortcuts = [
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::Space), "toggle"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::Digit1), "preset_5"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::Digit2), "preset_15"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::Digit3), "preset_25"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::KeyS), "settings"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::Digit0), "reset"),
+                (Shortcut::new(Some(Modifiers::CONTROL), Code::KeyP), "toggle_pomodoro"),
+            ];
+            // Tracks held keys so key repeat does not fire an action twice.
+            let shortcuts_down: [AtomicBool; 7] = std::array::from_fn(|_| AtomicBool::new(false));
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
                     .with_handler(move |app, pressed_shortcut, event| {
-                        if pressed_shortcut != &shortcut {
+                        let Some(index) = shortcuts
+                            .iter()
+                            .position(|(shortcut, _)| shortcut == pressed_shortcut)
+                        else {
                             return;
-                        }
+                        };
                         match event.state() {
                             ShortcutState::Pressed => {
-                                if !shortcut_down.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                                    let state = app.state::<Mutex<Timer>>();
-                                    if let Ok(mut timer) = state.lock() {
-                                        let _ = timer.action("toggle", None, SystemTime::now());
-                                    };
+                                if !shortcuts_down[index].swap(true, Ordering::Relaxed) {
+                                    run_action(app, shortcuts[index].1);
                                 }
                             }
                             ShortcutState::Released => {
-                                shortcut_down.store(false, std::sync::atomic::Ordering::Relaxed);
+                                shortcuts_down[index].store(false, Ordering::Relaxed);
                             }
                         }
                     })
                     .build(),
             )?;
-            app.global_shortcut().register(shortcut).map_err(|error| {
-                std::io::Error::other(format!("Could not register Control+S: {error}"))
-            })?;
+            for (shortcut, action) in shortcuts {
+                if let Err(error) = app.global_shortcut().register(shortcut) {
+                    eprintln!("Could not register shortcut for {action}: {error}");
+                }
+            }
 
-            let toggle = MenuItem::with_id(app, "toggle", "Start", true, None::<&str>)?;
-            let pomodoro_mode = CheckMenuItem::with_id(app, "toggle_pomodoro", "Pomodoro mode", true, false, None::<&str>)?;
-            let reset = MenuItem::with_id(app, "reset", "Reset", true, None::<&str>)?;
-            let five = MenuItem::with_id(app, "preset_5", "Start 5 minutes", true, None::<&str>)?;
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    if let Some(action) = url_action(url.host_str().unwrap_or_default(), url.path()) {
+                        run_action(&handle, &action);
+                    }
+                }
+            });
+
+            let toggle = MenuItem::with_id(app, "toggle", "Start", true, Some("Ctrl+Space"))?;
+            let pomodoro_mode = CheckMenuItem::with_id(app, "toggle_pomodoro", "Pomodoro mode", true, false, Some("Ctrl+P"))?;
+            let reset = MenuItem::with_id(app, "reset", "Reset", true, Some("Ctrl+0"))?;
+            let five = MenuItem::with_id(app, "preset_5", "Start 5 minutes", true, Some("Ctrl+1"))?;
             let fifteen =
-                MenuItem::with_id(app, "preset_15", "Start 15 minutes", true, None::<&str>)?;
+                MenuItem::with_id(app, "preset_15", "Start 15 minutes", true, Some("Ctrl+2"))?;
             let twenty_five =
-                MenuItem::with_id(app, "preset_25", "Start 25 minutes", true, None::<&str>)?;
+                MenuItem::with_id(app, "preset_25", "Start 25 minutes", true, Some("Ctrl+3"))?;
             let settings =
-                MenuItem::with_id(app, "settings", "Timer settings…", true, None::<&str>)?;
+                MenuItem::with_id(app, "settings", "Timer settings…", true, Some("Ctrl+S"))?;
             let quit = MenuItem::with_id(app, "quit", "Quit Desktop Timer", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let separator2 = PredefinedMenuItem::separator(app)?;
@@ -112,31 +180,7 @@ pub fn run() {
                 .tooltip("Desktop Timer")
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| {
-                    let id = event.id.as_ref();
-                    if id == "quit" {
-                        app.exit(0);
-                        return;
-                    }
-                    if id == "settings" {
-                        show_window(app);
-                        return;
-                    }
-                    let state = app.state::<Mutex<Timer>>();
-                    if let Ok(mut timer) = state.lock() {
-                        let now = SystemTime::now();
-                        let action = id;
-                        if let Some(minutes) = id
-                            .strip_prefix("preset_")
-                            .and_then(|s| s.parse::<u64>().ok())
-                        {
-                            let _ = timer.action("set_duration", Some(minutes * 60), now);
-                            let _ = timer.action("start", None, now);
-                        } else {
-                            let _ = timer.action(action, None, now);
-                        }
-                    };
-                })
+                .on_menu_event(|app, event| run_action(app, event.id.as_ref()))
                 .build(app)?;
             if let Err(error) = tray_icon::update(&tray, "clock") {
                 eprintln!("Could not set menu bar icon: {error}");
@@ -170,6 +214,8 @@ pub fn run() {
                                     eprintln!("Could not dismiss break reminder: {error}");
                                 }
                             }
+                            // Focus stays on while a timer or focus session runs, not during breaks.
+                            focus_mode::set(snapshot.status == "running" && snapshot.phase == "focus");
                             if previous_snapshot.as_ref() != Some(&snapshot) {
                                 let title = format!(
                                     "{:02}:{:02}",
@@ -247,4 +293,19 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Desktop Timer");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::url_action;
+
+    #[test]
+    fn urls_map_to_timer_actions() {
+        assert_eq!(url_action("start", "").as_deref(), Some("start"));
+        assert_eq!(url_action("pomodoro", "/").as_deref(), Some("pomodoro"));
+        assert_eq!(url_action("preset", "/5").as_deref(), Some("preset_5"));
+        assert_eq!(url_action("preset", "/0"), None);
+        assert_eq!(url_action("preset", "/abc"), None);
+        assert_eq!(url_action("quit", ""), None);
+    }
 }

@@ -18,12 +18,33 @@ The app is not notarized. If macOS blocks it, attempt to open it, then go to **S
 
 ## Use
 
-- **Control + S** starts, pauses, or resumes the timer from any app.
+- **Control + Space** starts, pauses, or resumes the timer from any app.
+- **Control + 1**, **2**, or **3** starts a 5, 15, or 25 minute timer.
+- **Control + S** opens the timer settings.
+- **Control + 0** resets the timer, and **Control + P** turns Pomodoro mode on or off.
 - Choose a preset or set a custom countdown.
 - **Pomodoro:** 25-minute focus sessions, 5-minute breaks, and a 15-minute break after four sessions.
-- When time runs out, a blurred reminder appears. Use its button or **Escape** to dismiss it. In Pomodoro mode, the button or **Control + S** starts the next phase.
+- When time runs out, a blurred reminder appears with a short guided break, such as an eye rest or a stretch. Use its button or **Escape** to dismiss it. In Pomodoro mode, the button or **Control + Space** starts the next phase.
 
 Closing settings keeps the timer running. Quit from the menu bar to exit.
+
+## Automate
+
+**Focus mode.** macOS does not let apps switch Focus directly, so Desktop Timer runs two shortcuts if you create them in the Shortcuts app:
+
+- **Desktop Timer Focus On** — add a **Set Focus** action that turns a Focus on.
+- **Desktop Timer Focus Off** — add a **Set Focus** action that turns it off.
+
+The first runs when a timer or focus session starts. The second runs when it pauses, ends, or you quit. Breaks leave Focus off.
+
+**Shortcuts and scripts.** The installed app answers `desktop-timer://` links. Use them from an **Open URLs** action in Shortcuts, or from a terminal with `open`:
+
+```sh
+open desktop-timer://start       # also: pause, toggle, reset
+open desktop-timer://preset/10   # start a timer of 1 to 1440 minutes
+open desktop-timer://pomodoro    # or timer, to switch modes
+open desktop-timer://settings
+```
 
 ## Develop
 

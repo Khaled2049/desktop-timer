@@ -10,6 +10,7 @@ pub struct Snapshot {
     pub mode: &'static str,
     pub phase: &'static str,
     pub completed_sessions: u64,
+    pub finished_count: u64,
     pub next_phase: &'static str,
 }
 
@@ -21,6 +22,7 @@ pub struct Timer {
     pomodoro: bool,
     phase: &'static str,
     completed_sessions: u64,
+    finished_count: u64,
 }
 
 impl Default for Timer {
@@ -33,6 +35,7 @@ impl Default for Timer {
             pomodoro: false,
             phase: "focus",
             completed_sessions: 0,
+            finished_count: 0,
         }
     }
 }
@@ -50,6 +53,7 @@ impl Timer {
             mode: if self.pomodoro { "pomodoro" } else { "timer" },
             phase: self.phase,
             completed_sessions: self.completed_sessions,
+            finished_count: self.finished_count,
             next_phase: self.next_phase(),
             duration_seconds: self.duration.as_secs(),
             remaining_seconds: remaining.as_secs() + u64::from(remaining.subsec_nanos() > 0),
@@ -70,6 +74,7 @@ impl Timer {
             self.deadline = None;
             self.remaining = Duration::ZERO;
             self.finished = true;
+            self.finished_count += 1;
             if self.pomodoro && self.phase == "focus" {
                 self.completed_sessions += 1;
             }
@@ -208,6 +213,7 @@ mod tests {
         assert!(timer.tick(now + Duration::from_millis(103750)));
         assert!(!timer.tick(now + Duration::from_secs(200)));
         assert_eq!(timer.snapshot(now).status, "finished");
+        assert_eq!(timer.snapshot(now).finished_count, 1);
         timer.action("start", None, now).unwrap();
         assert_eq!(timer.snapshot(now).remaining_seconds, 5);
     }
