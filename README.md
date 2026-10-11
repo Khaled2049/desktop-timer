@@ -14,7 +14,13 @@ Requires macOS 11 or later. The current download supports **Apple Silicon** (M-s
 2. Open it and drag **Desktop Timer** into **Applications**.
 3. Launch the app and click its menu bar icon to get started.
 
-The app is not notarized. If macOS blocks it, attempt to open it, then go to **System Settings → Privacy & Security → Open Anyway** if you trust the download. [Apple’s instructions](https://support.apple.com/en-us/102445).
+Or install from a terminal. Run it again to update:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Khaled2049/desktop-timer/main/install.sh | sh
+```
+
+The app is not notarized. If macOS blocks the downloaded DMG, attempt to open it, then go to **System Settings → Privacy & Security → Open Anyway** if you trust the download. [Apple’s instructions](https://support.apple.com/en-us/102445).
 
 ## Use
 
